@@ -2,11 +2,8 @@ package com.trenton.harvester.updater;
 
 import org.bukkit.plugin.java.JavaPlugin;
 import org.json.JSONObject;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+
+import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.channels.Channels;
@@ -71,7 +68,7 @@ public class UpdateChecker {
             if (!updateFolder.exists()) {
                 updateFolder.mkdirs();
             }
-            File outputFile = new File(updateFolder, plugin.getName() + ".jar");
+            File outputFile = new File(updateFolder, "Harvester-" + latestVersion + ".jar");
             ReadableByteChannel readableByteChannel = Channels.newChannel(inputStream);
             FileOutputStream fileOutputStream = new FileOutputStream(outputFile);
             fileOutputStream.getChannel().transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
