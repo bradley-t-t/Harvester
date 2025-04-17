@@ -1,0 +1,10 @@
+name: Harvester
+version: 1.0-SNAPSHOT
+main: com.trenton.harvester.Harvester
+api-version: 1.21
+authors: [ Trent ]
+description: Right-click fully grown crops (wheat, carrots, potatoes, beetroots, nether wart) to harvest and replant using one seed, perfect for vanilla survival servers.
+permissions:
+  harvester.use:
+    description: Allows players to harvest and replant crops with Harvester.
+    default: true

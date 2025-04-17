@@ -1,0 +1,31 @@
+# Harvester Configuration. Author: TrentMC (https://www.spigotmc.org/members/trentmc.1675162/)
+#
+# Crops supported by Harvester:
+# - wheat: Planted on farmland, uses wheat seeds. Drops 1 wheat, 0-3 seeds; consumes 1 seed to replant.
+# - carrots: Planted on farmland, uses carrots as seeds. Drops 1-4 carrots; consumes 1 carrot to replant.
+# - potatoes: Planted on farmland, uses potatoes as seeds. Drops 1-4 potatoes, 2% chance for poisonous potato; consumes 1 potato to replant.
+# - beetroots: Planted on farmland, uses beetroot seeds. Drops 1 beetroot, 0-3 seeds; consumes 1 seed to replant.
+# - nether_wart: Planted on soul sand, uses nether wart as seeds. Drops 2-4 nether wart; consumes 1 nether wart to replant.
+
+crops:
+  enabled:
+    - wheat: true
+    - carrots: true
+    - potatoes: true
+    - beetroots: true
+    - nether_wart: true
+
+effects:
+  particles:
+    enabled: true
+    type: VILLAGER_HAPPY
+    count: 10
+  sound:
+    enabled: true
+    type: BLOCK_CROP_BREAK
+    volume: 1.0
+    pitch: 1.0
+
+permissions:
+  require_permission: false
+  permission_node: harvester.use
