@@ -9,14 +9,19 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public final class Harvester extends JavaPlugin {
+public class Harvester extends JavaPlugin {
+
+    private boolean autoUpdaterEnabled;
+    private boolean bStatsEnabled;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        autoUpdaterEnabled = getConfig().getBoolean("auto_updater.enabled", true);
+        bStatsEnabled = getConfig().getBoolean("bstats.enabled", true);
         getServer().getPluginManager().registerEvents(new CropListener(this), this);
         UpdateChecker updateChecker = new UpdateChecker(this, 124141);
-        if (getConfig().getBoolean("auto_updater.enabled", true)) {
+        if (autoUpdaterEnabled) {
             updateChecker.checkForUpdates(true);
             if (!updateChecker.isUpdateAvailable()) {
                 getLogger().info("No update available or update check failed.");
@@ -30,8 +35,8 @@ public final class Harvester extends JavaPlugin {
                 }
             }
         }, this);
-        if (getConfig().getBoolean("bstats.enabled", true)) {
-            new Metrics(this,25508);
+        if (bStatsEnabled) {
+            new Metrics(this, 25508);
         }
         getLogger().info("Harvester plugin enabled!");
     }

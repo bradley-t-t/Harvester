@@ -15,8 +15,10 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.plugin.Plugin;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.*;
 
@@ -27,20 +29,39 @@ public class CropListener implements Listener {
     private final Map<Material, Material> cropToSeed;
     private final Map<Material, Material> cropToPlantingBlock;
     private final Set<Material> enabledCrops;
+    private final Set<Material> hoes;
     private final Object griefPrevention;
     private final Object worldGuard;
+    private final Method griefPreventionGetClaimAt;
     private final Method griefPreventionAllowBreak;
     private final Method griefPreventionAllowBuild;
     private final Method worldGuardCreateProtectionQuery;
     private final Method protectionQueryTestBlockBreak;
     private final Method protectionQueryTestBlockPlace;
+    private final Field griefPreventionDataStore;
+    private final boolean requireHoe;
+    private final boolean useHoeDurability;
+    private final boolean requirePermission;
+    private final boolean particlesEnabled;
+    private final boolean soundEnabled;
+    private final String noPermissionMessage;
+    private final String noHoeMessage;
+    private final String particleType;
+    private final String soundType;
+    private final int particleCount;
+    private final float soundVolume;
+    private final float soundPitch;
 
     public CropListener(Harvester plugin) {
         this.plugin = plugin;
         this.config = plugin.getConfig();
-        this.cropToSeed = new HashMap<>();
-        this.cropToPlantingBlock = new HashMap<>();
-        this.enabledCrops = new HashSet<>();
+        cropToSeed = new HashMap<>();
+        cropToPlantingBlock = new HashMap<>();
+        enabledCrops = new HashSet<>();
+        hoes = new HashSet<>(Arrays.asList(
+                Material.WOODEN_HOE, Material.STONE_HOE, Material.IRON_HOE,
+                Material.GOLDEN_HOE, Material.DIAMOND_HOE, Material.NETHERITE_HOE
+        ));
 
         cropToSeed.put(Material.WHEAT, Material.WHEAT_SEEDS);
         cropToSeed.put(Material.CARROTS, Material.CARROT);
@@ -58,8 +79,7 @@ public class CropListener implements Listener {
         for (Map<?, ?> cropEntry : configuredCrops) {
             for (Map.Entry<?, ?> entry : cropEntry.entrySet()) {
                 String cropName = entry.getKey().toString().toUpperCase();
-                boolean isEnabled = Boolean.parseBoolean(entry.getValue().toString());
-                if (isEnabled) {
+                if (Boolean.parseBoolean(entry.getValue().toString())) {
                     try {
                         Material crop = Material.valueOf(cropName);
                         if (cropToSeed.containsKey(crop)) {
@@ -72,82 +92,88 @@ public class CropListener implements Listener {
             }
         }
 
-        griefPrevention = getGriefPrevention();
-        worldGuard = getWorldGuard();
-        griefPreventionAllowBreak = getGriefPreventionMethod("allowBreak");
-        griefPreventionAllowBuild = getGriefPreventionMethod("allowBuild");
-        worldGuardCreateProtectionQuery = getWorldGuardMethod("createProtectionQuery");
-        protectionQueryTestBlockBreak = getProtectionQueryMethod("testBlockBreak");
-        protectionQueryTestBlockPlace = getProtectionQueryMethod("testBlockPlace");
-    }
+        requireHoe = config.getBoolean("require_hoe", false);
+        useHoeDurability = config.getBoolean("hoe_durability", false);
+        requirePermission = config.getBoolean("permissions.require_permission", false);
+        particlesEnabled = config.getBoolean("effects.particles.enabled", true);
+        soundEnabled = config.getBoolean("effects.sound.enabled", true);
+        noPermissionMessage = config.getString("messages.no_permission", "&cYou don't have permission to harvest here!");
+        noHoeMessage = config.getString("messages.no_hoe", "&cYou must hold a hoe to harvest crops!");
+        particleType = config.getString("effects.particles.type", "VILLAGER_HAPPY");
+        soundType = config.getString("effects.sound.type", "BLOCK_CROP_BREAK");
+        particleCount = config.getInt("effects.particles.count", 10);
+        soundVolume = (float) config.getDouble("effects.sound.volume", 1.0);
+        soundPitch = (float) config.getDouble("effects.sound.pitch", 1.0);
 
-    private Object getGriefPrevention() {
+        Object gpInstance = null;
+        Field gpDataStore = null;
+        Method gpGetClaimAt = null;
+        Method gpAllowBreak = null;
+        Method gpAllowBuild = null;
+        Object wgInstance = null;
+        Method wgCreateProtectionQuery = null;
+        Method pqTestBlockBreak = null;
+        Method pqTestBlockPlace = null;
+
         try {
             Plugin gp = plugin.getServer().getPluginManager().getPlugin("GriefPrevention");
             if (gp != null && gp.getClass().getName().equals("me.ryanhamshire.GriefPrevention.GriefPrevention")) {
-                return gp;
+                gpInstance = gp;
+                gpDataStore = gp.getClass().getField("dataStore");
+                Class<?> claimClass = Class.forName("me.ryanhamshire.GriefPrevention.Claim");
+                gpGetClaimAt = gpDataStore.getType().getMethod("getClaimAt", org.bukkit.Location.class, boolean.class, claimClass);
+                gpAllowBreak = claimClass.getMethod("allowBreak", Player.class, Material.class);
+                gpAllowBuild = claimClass.getMethod("allowBuild", Player.class, Material.class);
             }
         } catch (Exception e) {
             plugin.getLogger().info("GriefPrevention not found, skipping integration.");
         }
-        return null;
-    }
 
-    private Object getWorldGuard() {
         try {
             Plugin wg = plugin.getServer().getPluginManager().getPlugin("WorldGuard");
             if (wg != null && wg.getClass().getName().equals("com.sk89q.worldguard.bukkit.WorldGuardPlugin")) {
-                return wg;
+                wgInstance = wg;
+                wgCreateProtectionQuery = wg.getClass().getMethod("createProtectionQuery");
+                Class<?> protectionQueryClass = Class.forName("com.sk89q.worldguard.bukkit.ProtectionQuery");
+                pqTestBlockBreak = protectionQueryClass.getMethod("testBlockBreak", Player.class, Block.class);
+                pqTestBlockPlace = protectionQueryClass.getMethod("testBlockPlace", Player.class, org.bukkit.Location.class, Material.class);
             }
         } catch (Exception e) {
             plugin.getLogger().info("WorldGuard not found, skipping integration.");
         }
-        return null;
+
+        griefPrevention = gpInstance;
+        griefPreventionDataStore = gpDataStore;
+        griefPreventionGetClaimAt = gpGetClaimAt;
+        griefPreventionAllowBreak = gpAllowBreak;
+        griefPreventionAllowBuild = gpAllowBuild;
+        worldGuard = wgInstance;
+        worldGuardCreateProtectionQuery = wgCreateProtectionQuery;
+        protectionQueryTestBlockBreak = pqTestBlockBreak;
+        protectionQueryTestBlockPlace = pqTestBlockPlace;
     }
 
-    private Method getGriefPreventionMethod(String methodName) {
-        if (griefPrevention == null) return null;
-        try {
-            Class<?> claimClass = Class.forName("me.ryanhamshire.GriefPrevention.Claim");
-            return claimClass.getMethod(methodName, Player.class, Material.class);
-        } catch (Exception e) {
-            plugin.getLogger().warning("Failed to find GriefPrevention method: " + methodName);
-            return null;
-        }
-    }
-
-    private Method getWorldGuardMethod(String methodName) {
-        if (worldGuard == null) return null;
-        try {
-            return worldGuard.getClass().getMethod(methodName);
-        } catch (Exception e) {
-            plugin.getLogger().warning("Failed to find WorldGuard method: " + methodName);
-            return null;
-        }
-    }
-
-    private Method getProtectionQueryMethod(String methodName) {
-        if (worldGuardCreateProtectionQuery == null) return null;
-        try {
-            Class<?> protectionQueryClass = Class.forName("com.sk89q.worldguard.bukkit.ProtectionQuery");
-            if (methodName.equals("testBlockBreak")) {
-                return protectionQueryClass.getMethod(methodName, Player.class, Block.class);
-            } else if (methodName.equals("testBlockPlace")) {
-                return protectionQueryClass.getMethod(methodName, Player.class, org.bukkit.Location.class, Material.class);
-            }
-        } catch (Exception e) {
-            plugin.getLogger().warning("Failed to find ProtectionQuery method: " + methodName);
-        }
-        return null;
-    }
-
-    private void sendNoPermissionMessage(Player player) {
-        String message = config.getString("messages.no_permission", "&cYou don't have permission to harvest here!");
+    private void sendConfigMessage(Player player, String message) {
         if (message != null && !message.isEmpty()) {
-            plugin.getLogger().info("Sending no-permission message to " + player.getName() + ": " + message);
+            plugin.getLogger().info("Sending message to " + player.getName() + ": " + message);
             player.sendMessage(ChatColor.translateAlternateColorCodes('&', message));
         } else {
-            plugin.getLogger().warning("No-permission message is null or empty in config.yml");
+            plugin.getLogger().warning("Message is null or empty in config.yml");
+        }
+    }
+
+    private boolean isHoe(ItemStack item) {
+        return item != null && hoes.contains(item.getType());
+    }
+
+    private void applyHoeDurability(Player player, ItemStack hoe) {
+        if (useHoeDurability && hoe.getItemMeta() instanceof Damageable damageable) {
+            damageable.setDamage(damageable.getDamage() + 1);
+            hoe.setItemMeta(damageable);
+            if (damageable.getDamage() >= hoe.getType().getMaxDurability()) {
+                player.getInventory().setItemInMainHand(null);
+                player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ITEM_BREAK, 1.0f, 1.0f);
+            }
         }
     }
 
@@ -155,36 +181,28 @@ public class CropListener implements Listener {
         BlockBreakEvent breakEvent = new BlockBreakEvent(block, player);
         plugin.getServer().getPluginManager().callEvent(breakEvent);
         if (breakEvent.isCancelled()) {
-            sendNoPermissionMessage(player);
+            sendConfigMessage(player, noPermissionMessage);
             return false;
         }
 
         BlockPlaceEvent placeEvent = new BlockPlaceEvent(block, block.getState(), block.getRelative(0, -1, 0), new ItemStack(block.getType()), player, true);
         plugin.getServer().getPluginManager().callEvent(placeEvent);
         if (placeEvent.isCancelled()) {
-            sendNoPermissionMessage(player);
+            sendConfigMessage(player, noPermissionMessage);
             return false;
         }
 
-        if (griefPrevention != null) {
+        if (griefPrevention != null && griefPreventionDataStore != null && griefPreventionGetClaimAt != null) {
             try {
-                Object dataStore = griefPrevention.getClass().getField("dataStore").get(griefPrevention);
-                Method getClaimAt = dataStore.getClass().getMethod("getClaimAt", org.bukkit.Location.class, boolean.class, Class.forName("me.ryanhamshire.GriefPrevention.Claim"));
-                Object claim = getClaimAt.invoke(dataStore, block.getLocation(), false, null);
+                Object claim = griefPreventionGetClaimAt.invoke(griefPreventionDataStore.get(griefPrevention), block.getLocation(), false, null);
                 if (claim != null) {
-                    if (griefPreventionAllowBreak != null) {
-                        String error = (String) griefPreventionAllowBreak.invoke(claim, player, block.getType());
-                        if (error != null) {
-                            sendNoPermissionMessage(player);
-                            return false;
-                        }
+                    if (griefPreventionAllowBreak != null && griefPreventionAllowBreak.invoke(claim, player, block.getType()) != null) {
+                        sendConfigMessage(player, noPermissionMessage);
+                        return false;
                     }
-                    if (griefPreventionAllowBuild != null) {
-                        String error = (String) griefPreventionAllowBuild.invoke(claim, player, block.getType());
-                        if (error != null) {
-                            sendNoPermissionMessage(player);
-                            return false;
-                        }
+                    if (griefPreventionAllowBuild != null && griefPreventionAllowBuild.invoke(claim, player, block.getType()) != null) {
+                        sendConfigMessage(player, noPermissionMessage);
+                        return false;
                     }
                 }
             } catch (Exception e) {
@@ -195,14 +213,12 @@ public class CropListener implements Listener {
         if (worldGuard != null && worldGuardCreateProtectionQuery != null && protectionQueryTestBlockBreak != null && protectionQueryTestBlockPlace != null) {
             try {
                 Object protectionQuery = worldGuardCreateProtectionQuery.invoke(worldGuard);
-                Boolean canBreak = (Boolean) protectionQueryTestBlockBreak.invoke(protectionQuery, player, block);
-                if (!canBreak) {
-                    sendNoPermissionMessage(player);
+                if (!(Boolean) protectionQueryTestBlockBreak.invoke(protectionQuery, player, block)) {
+                    sendConfigMessage(player, noPermissionMessage);
                     return false;
                 }
-                Boolean canPlace = (Boolean) protectionQueryTestBlockPlace.invoke(protectionQuery, player, block.getLocation(), block.getType());
-                if (!canPlace) {
-                    sendNoPermissionMessage(player);
+                if (!(Boolean) protectionQueryTestBlockPlace.invoke(protectionQuery, player, block.getLocation(), block.getType())) {
+                    sendConfigMessage(player, noPermissionMessage);
                     return false;
                 }
             } catch (Exception e) {
@@ -223,77 +239,78 @@ public class CropListener implements Listener {
         Block block = event.getClickedBlock();
         Material blockType = block.getType();
 
-        if (!enabledCrops.contains(blockType) ||
-                (config.getBoolean("permissions.require_permission") && !player.hasPermission("harvester.use"))) {
+        if (!enabledCrops.contains(blockType) || (requirePermission && !player.hasPermission("harvester.use"))) {
             return;
         }
 
-        if (block.getBlockData() instanceof Ageable ageable && ageable.getAge() == ageable.getMaximumAge()) {
-            Block belowBlock = block.getRelative(0, -1, 0);
-            if (!cropToPlantingBlock.get(blockType).equals(belowBlock.getType())) {
-                return;
+        if (!(block.getBlockData() instanceof Ageable ageable) || ageable.getAge() != ageable.getMaximumAge()) {
+            return;
+        }
+
+        if (!cropToPlantingBlock.get(blockType).equals(block.getRelative(0, -1, 0).getType())) {
+            return;
+        }
+
+        if (requireHoe && !isHoe(player.getInventory().getItemInMainHand())) {
+            sendConfigMessage(player, noHoeMessage);
+            return;
+        }
+
+        if (!canHarvestAndReplant(player, block)) {
+            return;
+        }
+
+        event.setCancelled(true);
+
+        Collection<ItemStack> drops = block.getDrops();
+        Material seedType = cropToSeed.get(blockType);
+        boolean hasSeed = false;
+
+        for (ItemStack drop : drops) {
+            if (drop.getType() == seedType && drop.getAmount() >= 1) {
+                hasSeed = true;
+                break;
             }
+        }
 
-            if (!canHarvestAndReplant(player, block)) {
-                return;
-            }
+        if (!hasSeed) {
+            return;
+        }
 
-            event.setCancelled(true);
-
-            Collection<ItemStack> drops = block.getDrops();
-            Material seedType = cropToSeed.get(blockType);
-            boolean hasSeed = false;
-
-            for (ItemStack drop : drops) {
-                if (drop.getType() == seedType && drop.getAmount() >= 1) {
-                    hasSeed = true;
-                    break;
-                }
-            }
-
-            if (!hasSeed) {
-                return;
-            }
-
-            boolean seedConsumed = false;
-            List<ItemStack> modifiedDrops = new ArrayList<>();
-            for (ItemStack drop : drops) {
-                ItemStack dropCopy = drop.clone();
-                if (dropCopy.getType() == seedType && !seedConsumed) {
-                    if (dropCopy.getAmount() > 1) {
-                        dropCopy.setAmount(dropCopy.getAmount() - 1);
-                        modifiedDrops.add(dropCopy);
-                    }
-                    seedConsumed = true;
-                } else if (dropCopy.getAmount() > 0) {
+        boolean seedConsumed = false;
+        List<ItemStack> modifiedDrops = new ArrayList<>();
+        for (ItemStack drop : drops) {
+            ItemStack dropCopy = drop.clone();
+            if (dropCopy.getType() == seedType && !seedConsumed) {
+                if (dropCopy.getAmount() > 1) {
+                    dropCopy.setAmount(dropCopy.getAmount() - 1);
                     modifiedDrops.add(dropCopy);
                 }
+                seedConsumed = true;
+            } else if (dropCopy.getAmount() > 0) {
+                modifiedDrops.add(dropCopy);
             }
+        }
 
-            for (ItemStack drop : modifiedDrops) {
-                block.getWorld().dropItemNaturally(block.getLocation(), drop);
-            }
+        for (ItemStack drop : modifiedDrops) {
+            block.getWorld().dropItemNaturally(block.getLocation(), drop);
+        }
 
-            block.setType(blockType);
-            Ageable newAgeable = (Ageable) block.getBlockData();
-            newAgeable.setAge(0);
-            block.setBlockData(newAgeable);
+        block.setType(blockType);
+        Ageable newAgeable = (Ageable) block.getBlockData();
+        newAgeable.setAge(0);
+        block.setBlockData(newAgeable);
 
-            if (config.getBoolean("effects.particles.enabled")) {
-                block.getWorld().spawnParticle(
-                        Particle.valueOf(config.getString("effects.particles.type", "VILLAGER_HAPPY")),
-                        block.getLocation().add(0.5, 0.5, 0.5),
-                        config.getInt("effects.particles.count", 10)
-                );
-            }
-            if (config.getBoolean("effects.sound.enabled")) {
-                block.getWorld().playSound(
-                        block.getLocation(),
-                        Sound.valueOf(config.getString("effects.sound.type", "BLOCK_CROP_BREAK")),
-                        (float) config.getDouble("effects.sound.volume", 1.0),
-                        (float) config.getDouble("effects.sound.pitch", 1.0)
-                );
-            }
+        if (requireHoe) {
+            applyHoeDurability(player, player.getInventory().getItemInMainHand());
+        }
+
+        if (particlesEnabled) {
+            block.getWorld().spawnParticle(Particle.valueOf(particleType), block.getLocation().add(0.5, 0.5, 0.5), particleCount);
+        }
+
+        if (soundEnabled) {
+            block.getWorld().playSound(block.getLocation(), Sound.valueOf(soundType), soundVolume, soundPitch);
         }
     }
 }

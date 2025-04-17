@@ -2,8 +2,11 @@ package com.trenton.harvester.updater;
 
 import org.bukkit.plugin.java.JavaPlugin;
 import org.json.JSONObject;
-
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.channels.Channels;
@@ -44,21 +47,33 @@ public class UpdateChecker {
             }
             latestVersion = json.getString("name");
             String currentVersion = plugin.getDescription().getVersion();
-            // Normalize versions by removing -SNAPSHOT suffix for comparison
-            String normalizedCurrent = currentVersion.replace("-SNAPSHOT", "");
-            String normalizedLatest = latestVersion.replace("-SNAPSHOT", "");
-
-            if (!normalizedCurrent.equals(normalizedLatest)) {
+            if (isVersionNewer(latestVersion, currentVersion)) {
                 updateAvailable = true;
                 plugin.getLogger().info("Update available: Harvester v" + latestVersion + " (current: v" + currentVersion + ")");
                 if (autoUpdate) {
                     downloadUpdate();
                 }
-            } else {
-                plugin.getLogger().info("Harvester is up to date: v" + currentVersion);
             }
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to check for updates: " + e.getMessage());
+        }
+    }
+
+    private boolean isVersionNewer(String latest, String current) {
+        try {
+            String[] latestParts = latest.replace("-SNAPSHOT", "").split("\\.");
+            String[] currentParts = current.replace("-SNAPSHOT", "").split("\\.");
+            int maxLength = Math.max(latestParts.length, currentParts.length);
+            for (int i = 0; i < maxLength; i++) {
+                int latestNum = i < latestParts.length ? Integer.parseInt(latestParts[i]) : 0;
+                int currentNum = i < currentParts.length ? Integer.parseInt(currentParts[i]) : 0;
+                if (latestNum > currentNum) return true;
+                if (latestNum < currentNum) return false;
+            }
+            return latest.contains("-SNAPSHOT") ? false : !current.contains("-SNAPSHOT");
+        } catch (NumberFormatException e) {
+            plugin.getLogger().warning("Invalid version format: latest=" + latest + ", current=" + current);
+            return false;
         }
     }
 
@@ -70,7 +85,7 @@ public class UpdateChecker {
             connection.setConnectTimeout(5000);
             connection.setReadTimeout(5000);
             InputStream inputStream = connection.getInputStream();
-            File updateFolder = new File(plugin.getDataFolder(), "Updates");
+            File updateFolder = new File(plugin.getDataFolder(), "AutoUpdater");
             if (!updateFolder.exists()) {
                 updateFolder.mkdirs();
             }
