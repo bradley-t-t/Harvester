@@ -44,12 +44,18 @@ public class UpdateChecker {
             }
             latestVersion = json.getString("name");
             String currentVersion = plugin.getDescription().getVersion();
-            if (!currentVersion.equals(latestVersion)) {
+            // Normalize versions by removing -SNAPSHOT suffix for comparison
+            String normalizedCurrent = currentVersion.replace("-SNAPSHOT", "");
+            String normalizedLatest = latestVersion.replace("-SNAPSHOT", "");
+
+            if (!normalizedCurrent.equals(normalizedLatest)) {
                 updateAvailable = true;
                 plugin.getLogger().info("Update available: Harvester v" + latestVersion + " (current: v" + currentVersion + ")");
                 if (autoUpdate) {
                     downloadUpdate();
                 }
+            } else {
+                plugin.getLogger().info("Harvester is up to date: v" + currentVersion);
             }
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to check for updates: " + e.getMessage());
@@ -64,7 +70,7 @@ public class UpdateChecker {
             connection.setConnectTimeout(5000);
             connection.setReadTimeout(5000);
             InputStream inputStream = connection.getInputStream();
-            File updateFolder = new File(plugin.getDataFolder().getParentFile(), "update");
+            File updateFolder = new File(plugin.getDataFolder(), "Updates");
             if (!updateFolder.exists()) {
                 updateFolder.mkdirs();
             }
