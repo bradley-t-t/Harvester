@@ -1,22 +1,19 @@
 package com.trenton.harvester;
 
-import com.trenton.harvester.listeners.CropListener;
-import com.trenton.harvester.updater.Updater;
+import com.trenton.coreapi.api.PluginInitializer;
+import com.trenton.updater.api.UpdaterImpl;
+import com.trenton.updater.api.UpdaterService;
 import org.bstats.bukkit.Metrics;
-import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 
 public class Harvester extends JavaPlugin {
-
     private FileConfiguration messagesConfig;
-    private Updater updater;
+    private UpdaterService updater;
+    private PluginInitializer initializer;
 
     @Override
     public void onEnable() {
@@ -24,28 +21,32 @@ public class Harvester extends JavaPlugin {
         saveDefaultMessagesConfig();
         File messagesFile = new File(getDataFolder(), "messages.yml");
         messagesConfig = YamlConfiguration.loadConfiguration(messagesFile);
-        getServer().getPluginManager().registerEvents(new CropListener(this), this);
+
+        // Initialize CoreAPI
+        String packageName = getClass().getPackageName();
+        initializer = new PluginInitializer(this, packageName);
+        initializer.initialize();
+
+        // Setup updater
         boolean autoUpdaterEnabled = getConfig().getBoolean("auto_updater.enabled", true);
-        updater = new Updater(this, 124141);
+        updater = new UpdaterImpl(this, 124141);
         if (autoUpdaterEnabled) {
             updater.checkForUpdates(true);
         }
-        getServer().getPluginManager().registerEvents(new Listener() {
-            @EventHandler
-            public void onPlayerJoin(PlayerJoinEvent event) {
-                if (event.getPlayer().hasPermission("harvester.update.notify") && updater.isUpdateAvailable()) {
-                    String message = messagesConfig.getString("update_available", "&eA new version of Harvester is available!");
-                    event.getPlayer().sendMessage(ChatColor.translateAlternateColorCodes('&', message));
-                }
-            }
-        }, this);
+
+        // Setup bStats
         new Metrics(this, 25508);
         getLogger().info("Harvester plugin enabled!");
     }
 
     @Override
     public void onDisable() {
-        updater.handleUpdateOnShutdown();
+        if (initializer != null) {
+            initializer.shutdown();
+        }
+        if (updater != null) {
+            updater.handleUpdateOnShutdown();
+        }
         getLogger().info("Harvester plugin disabled!");
     }
 
@@ -58,5 +59,9 @@ public class Harvester extends JavaPlugin {
         if (!messagesFile.exists()) {
             saveResource("messages.yml", false);
         }
+    }
+
+    public UpdaterService getUpdater() {
+        return updater;
     }
 }

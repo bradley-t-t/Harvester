@@ -6,7 +6,7 @@
 
     <groupId>com.trenton</groupId>
     <artifactId>Harvester</artifactId>
-    <version>1.7</version>
+    <version>2.0</version>
     <packaging>jar</packaging>
 
     <name>Harvester</name>
@@ -33,14 +33,27 @@
                 <artifactId>maven-shade-plugin</artifactId>
                 <version>3.5.3</version>
                 <configuration>
+                    <createDependencyReducedPom>false</createDependencyReducedPom>
                     <relocations>
                         <relocation>
+                            <pattern>com.trenton.coreapi</pattern>
+                            <shadedPattern>com.trenton.harvester.shaded.coreapi</shadedPattern>
+                        </relocation>
+                        <relocation>
                             <pattern>org.bstats</pattern>
-                            <shadedPattern>com.trenton.harvester.bstats</shadedPattern>
+                            <shadedPattern>com.trenton.harvester.shaded.bstats</shadedPattern>
+                        </relocation>
+                        <relocation>
+                            <pattern>com.trenton.updater.api</pattern>
+                            <shadedPattern>com.trenton.harvester.shaded.updater</shadedPattern>
+                        </relocation>
+                        <relocation>
+                            <pattern>com.google.guava</pattern>
+                            <shadedPattern>com.trenton.harvester.shaded.guava</shadedPattern>
                         </relocation>
                         <relocation>
                             <pattern>org.json</pattern>
-                            <shadedPattern>com.trenton.harvester.json</shadedPattern>
+                            <shadedPattern>com.trenton.harvester.shaded.json</shadedPattern>
                         </relocation>
                     </relocations>
                 </configuration>
@@ -64,16 +77,16 @@
 
     <repositories>
         <repository>
+            <id>papermc</id>
+            <url>https://repo.papermc.io/repository/maven-public/</url>
+        </repository>
+        <repository>
+            <id>bstats-repo</id>
+            <url>https://repo.bstats.org/repository/public/</url>
+        </repository>
+        <repository>
             <id>jitpack</id>
             <url>https://jitpack.io</url>
-        </repository>
-        <repository>
-            <id>spigotmc-repo</id>
-            <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
-        </repository>
-        <repository>
-            <id>sonatype</id>
-            <url>https://oss.sonatype.org/content/groups/public/</url>
         </repository>
         <repository>
             <id>enginehub</id>
@@ -87,10 +100,28 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.spigotmc</groupId>
-            <artifactId>spigot-api</artifactId>
-            <version>1.21.4-R0.1-SNAPSHOT</version>
+            <groupId>io.papermc.paper</groupId>
+            <artifactId>paper-api</artifactId>
+            <version>1.21.5-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.trenton</groupId>
+            <artifactId>CoreAPI</artifactId>
+            <version>1.0.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.bstats</groupId>
+            <artifactId>bstats-bukkit</artifactId>
+            <version>3.0.2</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.trenton</groupId>
+            <artifactId>UpdaterAPI</artifactId>
+            <version>1.0.0</version>
+            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>com.sk89q.worldguard</groupId>
@@ -103,18 +134,6 @@
             <artifactId>GriefPrevention</artifactId>
             <version>17.0.0</version>
             <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.bstats</groupId>
-            <artifactId>bstats-bukkit</artifactId>
-            <version>3.0.2</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.json</groupId>
-            <artifactId>json</artifactId>
-            <version>20231013</version>
-            <scope>compile</scope>
         </dependency>
     </dependencies>
 </project>

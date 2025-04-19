@@ -1,7 +1,8 @@
 package com.trenton.harvester.listeners;
 
+import com.trenton.coreapi.api.ListenerBase;
+import com.trenton.coreapi.util.MessageUtils;
 import com.trenton.harvester.Harvester;
-import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
@@ -16,14 +17,14 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
+import org.bukkit.plugin.Plugin;
 
 import java.util.*;
 
-public class CropListener implements Listener {
-
-    private final Harvester plugin;
-    private final FileConfiguration config;
-    private final FileConfiguration messages;
+public class CropListener implements ListenerBase, Listener {
+    private Harvester plugin;
+    private FileConfiguration config;
+    private FileConfiguration messages;
     private final Map<Material, Material> cropToSeed = new HashMap<>();
     private final Map<Material, Material> cropToPlantingBlock = new HashMap<>();
     private final Set<Material> enabledCrops = new HashSet<>();
@@ -31,21 +32,22 @@ public class CropListener implements Listener {
             Material.WOODEN_HOE, Material.STONE_HOE, Material.IRON_HOE,
             Material.GOLDEN_HOE, Material.DIAMOND_HOE, Material.NETHERITE_HOE
     );
-    private final boolean requireHoe;
-    private final boolean useHoeDurability;
-    private final boolean requirePermission;
-    private final boolean particlesEnabled;
-    private final boolean soundEnabled;
-    private final String particleType;
-    private final String soundType;
-    private final int particleCount;
-    private final float soundVolume;
-    private final float soundPitch;
+    private boolean requireHoe;
+    private boolean useHoeDurability;
+    private boolean requirePermission;
+    private boolean particlesEnabled;
+    private boolean soundEnabled;
+    private String particleType;
+    private String soundType;
+    private int particleCount;
+    private float soundVolume;
+    private float soundPitch;
 
-    public CropListener(Harvester plugin) {
-        this.plugin = plugin;
+    @Override
+    public void register(Plugin plugin) {
+        this.plugin = (Harvester) plugin;
         this.config = plugin.getConfig();
-        this.messages = plugin.getMessagesConfig();
+        this.messages = this.plugin.getMessagesConfig();
         cropToSeed.put(Material.WHEAT, Material.WHEAT_SEEDS);
         cropToSeed.put(Material.CARROTS, Material.CARROT);
         cropToSeed.put(Material.POTATOES, Material.POTATO);
@@ -82,15 +84,15 @@ public class CropListener implements Listener {
         particleCount = config.getInt("effects.particles.count", 10);
         soundVolume = (float) config.getDouble("effects.sound.volume", 1.0);
         soundPitch = (float) config.getDouble("effects.sound.pitch", 1.0);
+        plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
     private void sendConfigMessage(Player player, String messageKey) {
-        String message = messages.getString(messageKey);
-        if (message != null && !message.isEmpty()) {
-            player.sendMessage(ChatColor.translateAlternateColorCodes('&', message));
-        } else {
-            plugin.getLogger().warning("Message key '" + messageKey + "' is missing or empty in messages.yml");
+        if (plugin == null || messages == null) {
+            plugin.getLogger().warning("Cannot send message '" + messageKey + "': plugin or messages not initialized");
+            return;
         }
+        MessageUtils.sendMessage(plugin, messages, player, messageKey);
     }
 
     private boolean isHoe(ItemStack item) {
@@ -109,6 +111,10 @@ public class CropListener implements Listener {
     }
 
     private boolean canHarvestAndReplant(Player player, Block block) {
+        if (plugin == null) {
+            plugin.getLogger().warning("Cannot check harvest permissions: plugin not initialized");
+            return false;
+        }
         BlockBreakEvent breakEvent = new BlockBreakEvent(block, player);
         plugin.getServer().getPluginManager().callEvent(breakEvent);
         if (breakEvent.isCancelled()) {

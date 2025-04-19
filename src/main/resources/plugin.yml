@@ -1,5 +1,5 @@
 name: Harvester
-version: 1.7
+version: 2.0
 main: com.trenton.harvester.Harvester
 api-version: 1.21
 authors: [ Trent ]
