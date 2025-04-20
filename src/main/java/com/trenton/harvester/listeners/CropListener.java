@@ -49,9 +49,9 @@ public class CropListener implements ListenerBase, Listener {
         this.config = plugin.getConfig();
         this.messages = this.plugin.getMessagesConfig();
         cropToSeed.put(Material.WHEAT, Material.WHEAT_SEEDS);
-        cropToSeed.put(Material.CARROTS, Material.CARROT);
-        cropToSeed.put(Material.POTATOES, Material.POTATO);
-        cropToSeed.put(Material.BEETROOTS, Material.BEETROOT_SEEDS);
+        cropToSeed.put(Material.CARROT, Material.CARROT);
+        cropToSeed.put(Material.POTATO, Material.POTATO);
+        cropToSeed.put(Material.BEETROOT, Material.BEETROOT_SEEDS);
         cropToSeed.put(Material.NETHER_WART, Material.NETHER_WART);
         cropToPlantingBlock.put(Material.WHEAT, Material.FARMLAND);
         cropToPlantingBlock.put(Material.CARROTS, Material.FARMLAND);
@@ -64,9 +64,17 @@ public class CropListener implements ListenerBase, Listener {
                 String cropName = entry.getKey().toString().toUpperCase();
                 if (Boolean.parseBoolean(entry.getValue().toString())) {
                     try {
-                        Material crop = Material.valueOf(cropName);
-                        if (cropToSeed.containsKey(crop)) {
-                            enabledCrops.add(crop);
+                        // Map config crop names to block types for enabledCrops
+                        Material cropBlock = switch (cropName) {
+                            case "WHEAT" -> Material.WHEAT;
+                            case "CARROTS" -> Material.CARROTS;
+                            case "POTATOES" -> Material.POTATOES;
+                            case "BEETROOTS" -> Material.BEETROOTS;
+                            case "NETHER_WART" -> Material.NETHER_WART;
+                            default -> Material.valueOf(cropName);
+                        };
+                        if (cropToPlantingBlock.containsKey(cropBlock)) {
+                            enabledCrops.add(cropBlock);
                         }
                     } catch (IllegalArgumentException e) {
                         plugin.getLogger().warning("Invalid crop type in config: " + cropName);
@@ -157,7 +165,15 @@ public class CropListener implements ListenerBase, Listener {
         }
         event.setCancelled(true);
         Collection<ItemStack> drops = block.getDrops();
-        Material seedType = cropToSeed.get(blockType);
+        Material itemType = switch (blockType) {
+            case CARROTS -> Material.CARROT;
+            case POTATOES -> Material.POTATO;
+            case BEETROOTS -> Material.BEETROOT;
+            case WHEAT -> Material.WHEAT;
+            case NETHER_WART -> Material.NETHER_WART;
+            default -> blockType;
+        };
+        Material seedType = cropToSeed.get(itemType);
         boolean hasSeed = false;
         for (ItemStack drop : drops) {
             if (drop.getType() == seedType && drop.getAmount() >= 1) {

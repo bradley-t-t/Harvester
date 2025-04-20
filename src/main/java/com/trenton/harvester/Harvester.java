@@ -22,19 +22,16 @@ public class Harvester extends JavaPlugin {
         File messagesFile = new File(getDataFolder(), "messages.yml");
         messagesConfig = YamlConfiguration.loadConfiguration(messagesFile);
 
-        // Initialize CoreAPI
         String packageName = getClass().getPackageName();
         initializer = new PluginInitializer(this, packageName);
         initializer.initialize();
 
-        // Setup updater
         boolean autoUpdaterEnabled = getConfig().getBoolean("auto_updater.enabled", true);
         updater = new UpdaterImpl(this, 124141);
         if (autoUpdaterEnabled) {
             updater.checkForUpdates(true);
         }
 
-        // Setup bStats
         new Metrics(this, 25508);
         getLogger().info("Harvester plugin enabled!");
     }
