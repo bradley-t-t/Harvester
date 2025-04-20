@@ -1,26 +1,35 @@
 package com.trenton.harvester.listeners;
 
-import com.trenton.coreapi.api.ListenerBase;
+import com.trenton.coreapi.annotations.CoreListener;
+import com.trenton.coreapi.api.CoreListenerInterface;
 import com.trenton.coreapi.util.MessageUtils;
 import com.trenton.harvester.Harvester;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
+import org.bukkit.event.Event;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.plugin.Plugin;
 
-public class JoinListener implements ListenerBase, Listener {
+@CoreListener(name = "JoinListener")
+public class JoinListener implements CoreListenerInterface {
     private Harvester plugin;
 
-    @Override
-    public void register(Plugin plugin) {
-        this.plugin = (Harvester) plugin;
-        plugin.getServer().getPluginManager().registerEvents(this, plugin);
+    public void init(Harvester plugin) {
+        this.plugin = plugin;
     }
 
-    @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        if (event.getPlayer().hasPermission("harvester.update.notify") && plugin.getUpdater().isUpdateAvailable()) {
-            MessageUtils.sendMessage(plugin, plugin.getMessagesConfig(), event.getPlayer(), "update_available");
+    @Override
+    public void handleEvent(Event event) {
+        if (!(event instanceof PlayerJoinEvent joinEvent)) {
+            return;
         }
+        if (plugin == null) {
+            return;
+        }
+        if (joinEvent.getPlayer().hasPermission("harvester.update.notify") && plugin.getUpdater().isUpdateAvailable()) {
+            MessageUtils.sendMessage(plugin.getCoreAPI().getMessages(), joinEvent.getPlayer(), "update_available");
+        }
+    }
+
+    @Override
+    public Class<? extends Event>[] getHandledEvents() {
+        return new Class[]{PlayerJoinEvent.class};
     }
 }

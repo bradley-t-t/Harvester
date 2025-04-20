@@ -1,6 +1,7 @@
 package com.trenton.harvester.listeners;
 
-import com.trenton.coreapi.api.ListenerBase;
+import com.trenton.coreapi.annotations.CoreListener;
+import com.trenton.coreapi.api.CoreListenerInterface;
 import com.trenton.coreapi.util.MessageUtils;
 import com.trenton.harvester.Harvester;
 import org.bukkit.Material;
@@ -10,18 +11,17 @@ import org.bukkit.block.Block;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
+import org.bukkit.event.Event;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
-import org.bukkit.plugin.Plugin;
 
 import java.util.*;
 
-public class CropListener implements ListenerBase, Listener {
+@CoreListener(name = "CropListener")
+public class CropListener implements CoreListenerInterface {
     private Harvester plugin;
     private FileConfiguration config;
     private FileConfiguration messages;
@@ -43,11 +43,10 @@ public class CropListener implements ListenerBase, Listener {
     private float soundVolume;
     private float soundPitch;
 
-    @Override
-    public void register(Plugin plugin) {
-        this.plugin = (Harvester) plugin;
-        this.config = plugin.getConfig();
-        this.messages = this.plugin.getMessagesConfig();
+    public void init(Harvester plugin) {
+        this.plugin = plugin;
+        this.config = plugin.getCoreAPI().getConfig();
+        this.messages = plugin.getCoreAPI().getMessages();
         cropToSeed.put(Material.WHEAT, Material.WHEAT_SEEDS);
         cropToSeed.put(Material.CARROT, Material.CARROT);
         cropToSeed.put(Material.POTATO, Material.POTATO);
@@ -64,7 +63,6 @@ public class CropListener implements ListenerBase, Listener {
                 String cropName = entry.getKey().toString().toUpperCase();
                 if (Boolean.parseBoolean(entry.getValue().toString())) {
                     try {
-                        // Map config crop names to block types for enabledCrops
                         Material cropBlock = switch (cropName) {
                             case "WHEAT" -> Material.WHEAT;
                             case "CARROTS" -> Material.CARROTS;
@@ -92,60 +90,18 @@ public class CropListener implements ListenerBase, Listener {
         particleCount = config.getInt("effects.particles.count", 10);
         soundVolume = (float) config.getDouble("effects.sound.volume", 1.0);
         soundPitch = (float) config.getDouble("effects.sound.pitch", 1.0);
-        plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
-    private void sendConfigMessage(Player player, String messageKey) {
-        if (plugin == null || messages == null) {
-            plugin.getLogger().warning("Cannot send message '" + messageKey + "': plugin or messages not initialized");
+    @Override
+    public void handleEvent(Event event) {
+        if (!(event instanceof PlayerInteractEvent interactEvent)) {
             return;
         }
-        MessageUtils.sendMessage(plugin, messages, player, messageKey);
-    }
-
-    private boolean isHoe(ItemStack item) {
-        return item != null && hoes.contains(item.getType());
-    }
-
-    private void applyHoeDurability(Player player, ItemStack hoe) {
-        if (useHoeDurability && hoe.getItemMeta() instanceof Damageable damageable) {
-            damageable.setDamage(damageable.getDamage() + 1);
-            hoe.setItemMeta(damageable);
-            if (damageable.getDamage() >= hoe.getType().getMaxDurability()) {
-                player.getInventory().setItemInMainHand(null);
-                player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ITEM_BREAK, 1.0f, 1.0f);
-            }
-        }
-    }
-
-    private boolean canHarvestAndReplant(Player player, Block block) {
-        if (plugin == null) {
-            plugin.getLogger().warning("Cannot check harvest permissions: plugin not initialized");
-            return false;
-        }
-        BlockBreakEvent breakEvent = new BlockBreakEvent(block, player);
-        plugin.getServer().getPluginManager().callEvent(breakEvent);
-        if (breakEvent.isCancelled()) {
-            sendConfigMessage(player, "no_permission");
-            return false;
-        }
-        BlockPlaceEvent placeEvent = new BlockPlaceEvent(block, block.getState(), block.getRelative(0, -1, 0),
-                new ItemStack(block.getType()), player, true);
-        plugin.getServer().getPluginManager().callEvent(placeEvent);
-        if (placeEvent.isCancelled()) {
-            sendConfigMessage(player, "no_permission");
-            return false;
-        }
-        return true;
-    }
-
-    @EventHandler
-    public void onPlayerInteract(PlayerInteractEvent event) {
-        if (!event.getAction().toString().contains("RIGHT_CLICK") || !event.hasBlock()) {
+        if (!interactEvent.getAction().toString().contains("RIGHT_CLICK") || !interactEvent.hasBlock()) {
             return;
         }
-        Player player = event.getPlayer();
-        Block block = event.getClickedBlock();
+        Player player = interactEvent.getPlayer();
+        Block block = interactEvent.getClickedBlock();
         Material blockType = block.getType();
         if (!enabledCrops.contains(blockType) || (requirePermission && !player.hasPermission("harvester.use"))) {
             return;
@@ -163,7 +119,7 @@ public class CropListener implements ListenerBase, Listener {
         if (!canHarvestAndReplant(player, block)) {
             return;
         }
-        event.setCancelled(true);
+        interactEvent.setCancelled(true);
         Collection<ItemStack> drops = block.getDrops();
         Material itemType = switch (blockType) {
             case CARROTS -> Material.CARROT;
@@ -214,5 +170,54 @@ public class CropListener implements ListenerBase, Listener {
         if (soundEnabled) {
             block.getWorld().playSound(block.getLocation(), Sound.valueOf(soundType), soundVolume, soundPitch);
         }
+    }
+
+    @Override
+    public Class<? extends Event>[] getHandledEvents() {
+        return new Class[]{PlayerInteractEvent.class};
+    }
+
+    private void sendConfigMessage(Player player, String messageKey) {
+        if (plugin == null || messages == null) {
+            plugin.getLogger().warning("Cannot send message '" + messageKey + "': plugin or messages not initialized");
+            return;
+        }
+        MessageUtils.sendMessage(messages, player, messageKey);
+    }
+
+    private boolean isHoe(ItemStack item) {
+        return item != null && hoes.contains(item.getType());
+    }
+
+    private void applyHoeDurability(Player player, ItemStack hoe) {
+        if (useHoeDurability && hoe.getItemMeta() instanceof Damageable damageable) {
+            damageable.setDamage(damageable.getDamage() + 1);
+            hoe.setItemMeta(damageable);
+            if (damageable.getDamage() >= hoe.getType().getMaxDurability()) {
+                player.getInventory().setItemInMainHand(null);
+                player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ITEM_BREAK, 1.0f, 1.0f);
+            }
+        }
+    }
+
+    private boolean canHarvestAndReplant(Player player, Block block) {
+        if (plugin == null) {
+            plugin.getLogger().warning("Cannot check harvest permissions: plugin not initialized");
+            return false;
+        }
+        BlockBreakEvent breakEvent = new BlockBreakEvent(block, player);
+        plugin.getServer().getPluginManager().callEvent(breakEvent);
+        if (breakEvent.isCancelled()) {
+            sendConfigMessage(player, "no_permission");
+            return false;
+        }
+        BlockPlaceEvent placeEvent = new BlockPlaceEvent(block, block.getState(), block.getRelative(0, -1, 0),
+                new ItemStack(block.getType()), player, true);
+        plugin.getServer().getPluginManager().callEvent(placeEvent);
+        if (placeEvent.isCancelled()) {
+            sendConfigMessage(player, "no_permission");
+            return false;
+        }
+        return true;
     }
 }
