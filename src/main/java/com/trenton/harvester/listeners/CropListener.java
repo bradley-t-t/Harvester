@@ -47,16 +47,19 @@ public class CropListener implements CoreListenerInterface {
         this.plugin = plugin;
         this.config = plugin.getCoreAPI().getConfig();
         this.messages = plugin.getCoreAPI().getMessages();
+        // Map crop blocks to their seed items
         cropToSeed.put(Material.WHEAT, Material.WHEAT_SEEDS);
-        cropToSeed.put(Material.CARROT, Material.CARROT);
-        cropToSeed.put(Material.POTATO, Material.POTATO);
-        cropToSeed.put(Material.BEETROOT, Material.BEETROOT_SEEDS);
+        cropToSeed.put(Material.CARROTS, Material.CARROT);
+        cropToSeed.put(Material.POTATOES, Material.POTATO);
+        cropToSeed.put(Material.BEETROOTS, Material.BEETROOT_SEEDS);
         cropToSeed.put(Material.NETHER_WART, Material.NETHER_WART);
+        // Map crop blocks to their planting blocks
         cropToPlantingBlock.put(Material.WHEAT, Material.FARMLAND);
         cropToPlantingBlock.put(Material.CARROTS, Material.FARMLAND);
         cropToPlantingBlock.put(Material.POTATOES, Material.FARMLAND);
         cropToPlantingBlock.put(Material.BEETROOTS, Material.FARMLAND);
         cropToPlantingBlock.put(Material.NETHER_WART, Material.SOUL_SAND);
+        // Load enabled crops from config
         List<Map<?, ?>> configuredCrops = config.getMapList("crops.enabled");
         for (Map<?, ?> cropEntry : configuredCrops) {
             for (Map.Entry<?, ?> entry : cropEntry.entrySet()) {
@@ -121,15 +124,16 @@ public class CropListener implements CoreListenerInterface {
         }
         interactEvent.setCancelled(true);
         Collection<ItemStack> drops = block.getDrops();
+        // Map crop block to item type
         Material itemType = switch (blockType) {
             case CARROTS -> Material.CARROT;
             case POTATOES -> Material.POTATO;
             case BEETROOTS -> Material.BEETROOT;
             case WHEAT -> Material.WHEAT;
             case NETHER_WART -> Material.NETHER_WART;
-            default -> blockType;
+            default -> cropToSeed.get(blockType); // Fallback to seed type if defined
         };
-        Material seedType = cropToSeed.get(itemType);
+        Material seedType = cropToSeed.get(blockType);
         boolean hasSeed = false;
         for (ItemStack drop : drops) {
             if (drop.getType() == seedType && drop.getAmount() >= 1) {
@@ -211,8 +215,16 @@ public class CropListener implements CoreListenerInterface {
             sendConfigMessage(player, "no_permission");
             return false;
         }
-        BlockPlaceEvent placeEvent = new BlockPlaceEvent(block, block.getState(), block.getRelative(0, -1, 0),
-                new ItemStack(block.getType()), player, true);
+        // Use the seed item for the BlockPlaceEvent
+        Material seedType = cropToSeed.get(block.getType());
+        BlockPlaceEvent placeEvent = new BlockPlaceEvent(
+                block,
+                block.getState(),
+                block.getRelative(0, -1, 0),
+                new ItemStack(seedType != null ? seedType : Material.AIR), // Use seed item, fallback to AIR
+                player,
+                true
+        );
         plugin.getServer().getPluginManager().callEvent(placeEvent);
         if (placeEvent.isCancelled()) {
             sendConfigMessage(player, "no_permission");
